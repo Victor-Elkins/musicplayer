@@ -1,18 +1,23 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
+	"github.com/faiface/beep/mp3"
+	"github.com/faiface/beep/speaker"
 	_ "github.com/lib/pq" // Importing pq package to enable PostgreSQL driver
 )
 
 func main() {
 	// Set up the connection string
-	connStr := "meow"
+	connStr := "CONNSTRING"
 
 	// Open a connection to the database
 	db, err := sql.Open("postgres", connStr)
@@ -41,21 +46,48 @@ func main() {
 		}
 	}()
 
-	query := "SELECT file_data FROM audio_files LIMIT 1"
+	query := "SELECT file_data FROM audio_files"
 
 	rows, err := db.Query(query)
 	if err != nil {
 		log.Fatal("Error execution query: ", err)
 	}
 	defer rows.Close()
-
+	var file_data []byte
 	for rows.Next() {
-		var file_data byte
 		err := rows.Scan(&file_data)
 		if err != nil {
 			log.Fatal("Error Scanning row: ")
 		}
+
 	}
+	fmt.Print("hello")
+	playAudioFromBytes(file_data)
+}
+func playAudioFromBytes(fileData []byte) error {
+	// Create a reader from the byte data
+	buffer := bytes.NewReader(fileData)
+
+	readCloser := ioutil.NopCloser(buffer)
+	fmt.Print("hit")
+	// Decode the audio from the byte buffer
+	streamer, format, err := mp3.Decode(readCloser)
+	if err != nil {
+		log.Fatal("Error decoding audio: ", err)
+	}
+	defer streamer.Close()
+
+	// Initialize the speaker with the sample rate from the audio format
+	err = speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
+	if err != nil {
+		log.Fatal("Error initializing speaker: ", err)
+	}
+
+	// Play the decoded audio
+	speaker.Play(streamer)
+
+	// Wait for the audio to finish
+	select {}
 }
 
 func directory(startingDirectory string) string {
